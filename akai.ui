@@ -14,7 +14,7 @@
         <property name="position-set">True</property>
         <property name="wide-handle">True</property>
         <child>
-          <object class="GtkListBox" id="group_list">
+          <object class="GtkListBox" id="channel_list">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
           </object>
@@ -29,7 +29,34 @@
             <property name="can-focus">False</property>
             <property name="orientation">vertical</property>
             <child>
-              <placeholder/>
+              <object class="GtkScrolledWindow" id="message_scroll">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="vscrollbar-policy">always</property>
+                <property name="shadow-type">in</property>
+                <child>
+                  <object class="GtkViewport">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkBox" id="message_list">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <placeholder/>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
             </child>
             <child>
               <object class="GtkBox">
