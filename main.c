@@ -29,11 +29,15 @@ typedef struct application_t
 	GObject* window;
 	GtkListBox* channel_list;
 	GtkBox* message_list;
-	GtkEntry* message_input;
+	GtkTextView* message_input;
+	GtkScrolledWindow* message_scroll;
+	GtkTextBuffer* message_buffer;
 	GtkButton* send_button;
 	list_t* channels;
 	channel_t* current_channel;
 } application_t;
+
+static application_t* g_app;
 
 
 static void clear_message(GtkWidget* widget, gpointer parent)
@@ -52,7 +56,13 @@ static void display_message(application_t* app, const char* sender, const char* 
 	GtkWidget* row = gtk_list_box_row_new();
 	GtkWidget* grid = gtk_grid_new();
 	GtkWidget* head = gtk_label_new(sender);
-	GtkWidget* body = gtk_label_new(message);
+	gtk_label_set_xalign(GTK_LABEL(head), 0);
+	GtkWidget* body = gtk_text_view_new();
+	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(body), GTK_WRAP_WORD_CHAR);
+	gtk_text_view_set_editable(GTK_TEXT_VIEW(body), FALSE);
+	gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(body), FALSE);
+	gtk_widget_set_hexpand(body, TRUE);
+	gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(body)), message, -1);
 	gtk_grid_attach(GTK_GRID(grid), head, 0, 0, 1, 1);
 	gtk_grid_attach(GTK_GRID(grid), body, 0, 1, 2, 1);
 	gtk_container_add(GTK_CONTAINER(row), grid);
@@ -83,20 +93,42 @@ static void add_message(application_t* app, const char* sender, const char* mess
 	display_message(app, sender, message);
 }
 
-static void send_message(GtkWidget *widget, gpointer data)
+static void send_message(GtkWidget* widget, gpointer data)
 {
 	struct application_t* app = data;
-	const gchar* message = gtk_entry_get_text(app->message_input);
+	GtkTextIter start;
+	GtkTextIter end;
+	gtk_text_buffer_get_start_iter(app->message_buffer, &start);
+	gtk_text_buffer_get_end_iter(app->message_buffer, &end);
+	const gchar* message = gtk_text_buffer_get_text(app->message_buffer, &start, &end, TRUE);
 
 	if (app->current_channel == NULL)
 	{
 		return;
 	}
-	g_print("Send message to %s: %s\n", app->current_channel->name, message);
 
 	add_message(app, "Me", message);
 
-	gtk_entry_set_text(app->message_input, "");
+	gtk_text_buffer_set_text(app->message_buffer, "", 0);
+}
+
+static gboolean key_message(GtkWidget* widget, GdkEventKey* event)
+{
+	if (event->keyval == GDK_KEY_Return && !(event->state & GDK_SHIFT_MASK))// && !event->is_modifier)
+	{
+		send_message(widget, g_app);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static gboolean resize_message(GtkWidget* widget, gpointer data)
+{
+	application_t* app = g_app;
+	GtkAdjustment *adj = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(app->message_scroll));
+	gtk_adjustment_set_value(adj, gtk_adjustment_get_upper(adj));
+	gtk_scrolled_window_set_vadjustment(app->message_scroll, adj);
+	return FALSE;
 }
 
 
@@ -114,9 +146,13 @@ static void select_channel(GtkListBox* list, GtkListBoxRow* row, gpointer data)
 	channel_t* channel = list_find(APPLICATION(data)->channels, row, &channel_compare);
 	application_t* app = channel->app;
 	// save the text input the user was typing for the channel
-	const gchar* message = gtk_entry_get_text(channel->app->message_input);
+	GtkTextIter start;
+	GtkTextIter end;
+	gtk_text_buffer_get_start_iter(app->message_buffer, &start);
+	gtk_text_buffer_get_end_iter(app->message_buffer, &end);
+	const gchar* message = gtk_text_buffer_get_text(app->message_buffer, &start, &end, TRUE);
 	size_t len = strlen(message);
-	if (len > 0)
+	if (app->current_channel && len > 0)
 	{
 		app->current_channel->msg_tmp = malloc(sizeof(char) * (len + 1));
 		strcpy(app->current_channel->msg_tmp, message);
@@ -124,19 +160,17 @@ static void select_channel(GtkListBox* list, GtkListBoxRow* row, gpointer data)
 	app->current_channel = channel;
 	if (channel->msg_tmp)
 	{
-		gtk_entry_set_text(app->message_input, channel->msg_tmp);
+		gtk_text_buffer_set_text(app->message_buffer, channel->msg_tmp, -1);
 		free(channel->msg_tmp);
 		channel->msg_tmp = NULL;
 	}
 	else
 	{
-		gtk_entry_set_text(app->message_input, "");
+		gtk_text_buffer_set_text(app->message_buffer, "", 0);
 	}
 	// load the messages into the message panle
 	clear_messages(app);
 	load_messages(app);
-	
-	g_print("channel_selected: %s\n", channel->name);
 }
 
 static void add_channel(application_t* app, const char* name)
@@ -167,7 +201,8 @@ static void add_channel(application_t* app, const char* name)
 
 int main(int argc, char *argv[])
 {
-	application_t* app = malloc(sizeof(application_t));
+	g_app = malloc(sizeof(application_t));
+	application_t* app = g_app;
 	app->current_channel = NULL;
 
 	GtkBuilder* builder;
@@ -187,12 +222,16 @@ int main(int argc, char *argv[])
 	g_signal_connect(app->window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
 	app->channel_list = GTK_LIST_BOX(gtk_builder_get_object(builder, "channel_list"));
+	app->message_scroll = GTK_SCROLLED_WINDOW(gtk_builder_get_object(builder, "message_scroll"));
 	app->message_list = GTK_BOX(gtk_builder_get_object(builder, "message_list"));
-	app->message_input = GTK_ENTRY(gtk_builder_get_object(builder, "message_input"));
+	app->message_input = GTK_TEXT_VIEW(gtk_builder_get_object(builder, "message_input"));
+	app->message_buffer = GTK_TEXT_BUFFER(gtk_text_view_get_buffer(app->message_input));
 	app->send_button = GTK_BUTTON(gtk_builder_get_object(builder, "send_button"));
 
 	g_signal_connect(app->channel_list, "row-selected", G_CALLBACK(select_channel), app);
-	g_signal_connect(app->message_input, "activate", G_CALLBACK(send_message), app);
+	g_signal_connect(app->message_list, "size-allocate", G_CALLBACK(resize_message), app);
+	//g_signal_connect(app->message_input, "activate", G_CALLBACK(send_message), app);
+	g_signal_connect(app->message_input, "key-press-event", G_CALLBACK(key_message), NULL);
 	g_signal_connect(app->send_button, "clicked", G_CALLBACK(send_message), app);
 
 	app->channels = list_new();
