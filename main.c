@@ -93,6 +93,11 @@ static void add_message(application_t* app, const char* sender, const char* mess
 	display_message(app, sender, message);
 }
 
+static void test(GtkWidget* widget, message_t* message)
+{
+	g_print("Test from %s: %s\n", message->sender, message->body);
+}
+
 static void send_message(GtkWidget* widget, gpointer data)
 {
 	struct application_t* app = data;
@@ -227,6 +232,18 @@ int main(int argc, char *argv[])
 	app->message_input = GTK_TEXT_VIEW(gtk_builder_get_object(builder, "message_input"));
 	app->message_buffer = GTK_TEXT_BUFFER(gtk_text_view_get_buffer(app->message_input));
 	app->send_button = GTK_BUTTON(gtk_builder_get_object(builder, "send_button"));
+
+	g_signal_new("message",
+			G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+			0, NULL, NULL,
+			g_cclosure_marshal_VOID__POINTER,
+			G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+	message_t test_message;
+	test_message.sender = "octalus";
+	test_message.body = "hello";
+	g_signal_connect(app->window, "message", G_CALLBACK(test), NULL);
+	g_signal_emit_by_name(app->window, "message", &test_message);
 
 	g_signal_connect(app->channel_list, "row-selected", G_CALLBACK(select_channel), app);
 	g_signal_connect(app->message_list, "size-allocate", G_CALLBACK(resize_message), app);

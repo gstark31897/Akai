@@ -1,5 +1,7 @@
 #include "list.h"
 
+#include <stdio.h>
+
 // TODO: add custom freer function pointer that can free complex structs
 
 list_t* list_new()
@@ -133,6 +135,34 @@ void list_remove(list_t* list, size_t idx)
 	free(cur);
 	prev->next = next;
 	next->prev = prev;
+}
+
+void list_remove_node(list_t* list, node_t* node)
+{
+	node_t* prev = node->prev;
+	node_t* next = node->next;
+	free(node);
+	if (node == list->head)
+	{
+		list->head = next;
+	}
+
+	if (node == list->tail)
+	{
+		list->tail = prev;
+	}
+
+	if (prev)
+	{
+		printf("has next\n");
+		prev->next = next;
+	}
+
+	if (next)
+	{
+		printf("has prev\n");
+		next->prev = prev;
+	}
 }
 
 void* list_find(list_t* list, void* comp, int (*func)(void*, void*))
